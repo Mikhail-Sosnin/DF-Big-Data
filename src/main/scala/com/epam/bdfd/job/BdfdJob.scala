@@ -72,9 +72,9 @@ class BdfdJob extends Spark {
     // результирующее представление для обучения рекомендатеьной системы
     val starspaceOutput: Dataset[String] = flattenSubscriptions
     // TODO: join flattenSubscriptions с subscriptionsToFilter для дальнейшей фильтрации (joinWith); ключи для join в объекте-компаньоне
-      .filter(_ match {
+      .filter(_._2 == null /*match {
         case (_, toFilter) => toFilter == null
-      })
+      }*/)
       .map { case (subscriptions, _) => subscriptions }
       .groupByKey { case (uid, _) => uid }
       .mapGroups {

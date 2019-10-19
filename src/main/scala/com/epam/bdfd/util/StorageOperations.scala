@@ -20,7 +20,7 @@ object StorageOperations extends Spark {
     def writeText(path: String): Unit = ds.write.mode(Overwrite).text(path)
 
     def writeParquet(path: String): Unit = ds.write.mode(Overwrite).parquet(path)
-  }ds
+  }
 
   def readMongo[T <: Product : Encoder : TypeTag](uri: String): Dataset[T] =
     MongoSpark.load[T](ss, ReadConfig(Map("uri" -> uri))).as[T]

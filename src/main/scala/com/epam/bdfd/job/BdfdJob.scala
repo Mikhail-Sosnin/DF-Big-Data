@@ -75,14 +75,14 @@ class BdfdJob extends Spark {
       .filter(_._2 == null /*match {
         case (_, toFilter) => toFilter == null
       }*/)
-      .map { case (subscriptions, _) => subscriptions }
-      .groupByKey { case (uid, _) => uid }
+      .groupByKey { _._1 }
       .mapGroups {
-        case (uid, subscriptions) => (uid, subscriptions.toList.map { case (_, subscriptionId) => subscriptionId })
+        case (uid, subscriptions) => UserSubscriptions(uid, subscriptions.map(_._2).toSeq)
       }
       .withColumnRenamed("_1", "uid")
       .withColumnRenamed("_2", "items")
       .as[UserSubscriptions]
+        .map(toStarspaceOut)
     // TODO: фильтрация пользователей с небольшим количеством подписок (filter)
     // TODO: приведение к выходному виду для обучения рекомендатеьной системы (map)
     // TODO: подготовка к записи одного файла (coalesce)

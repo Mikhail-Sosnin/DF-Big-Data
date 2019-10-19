@@ -16,14 +16,6 @@ import scala.util.Try
   *
   */
 class BdfdJob extends Spark {
-  /** Метод для запуска ETL-преобразования
-    *
-    * @param sourceFilePath               путь к директории users_subscriptions_data_2019 в S3
-    * @param sourceMongoUri               адрес коллекции vk_db.user_info в MongoDB
-    * @param archiveUserSubscriptionsPath путь к архивной директории user_subscriptions_archive в S3
-    * @param archiveUserInfoPath          путь к архивной директории user_info_archive в S3
-    * @param starspaceOutPath             путь к директории с выходным файлом starspace_output в S3 для обучения рекомендательной системы
-    */
   def run(sourceFilePath: String,
           sourceMongoUri: String,
           archiveUserSubscriptionsPath: String,
@@ -32,58 +24,17 @@ class BdfdJob extends Spark {
     import com.epam.bdfd.util.StorageOperations.DatasetWriter
     import ss.implicits._
 
-    // подписки пользователей
     val userSubscriptionsDs: Dataset[UserSubscriptions] = readText(sourceFilePath)
       .flatMap(toUserSubscriptions)
-    //TODO: дедубликация (groupByKey, flatMapGroups)
-
     userSubscriptionsDs.writeParquet(archiveUserSubscriptionsPath)
 
-    // информация о пользователях
     val userInfoDs: Dataset[UserInfo] = readMongo[UserInfo](sourceMongoUri)
       .persist(StorageLevel.DISK_ONLY)
-    // TODO: дедубликация (groupByKey, flatMapGroups)
-
     userInfoDs.writeParquet(archiveUserInfoPath)
 
-    // объединенные подписки пользователей с информацией о пользователях
-    val joined: Dataset[(UserSubscriptions, UserInfo)] =
-    // TODO: join двух Dataset (joinWith)
-
-    // активные пользователи социальной сети
-    val activeUsersDs: Dataset[UserSubscriptions] =
-    // TODO: фильтрация joined по last_seen и deactivated (filter)
-    // TODO: преобразование в UserSubscriptions (map)
-
-    // редко встречающиеся подписки для фильтрации
-    val subscriptionsToFilter: Dataset[String] = activeUsersDs
-      .flatMap(_.items)
-    // TODO: подсчет количества каждой подписки в activeUsersDs (groupByKey, count)
-    // TODO: фильтрация редко встречающихся подписок (filter)
-    // TODO: преобразование в id подписки (map)
-
-    // `плоские` пользователи с подписками
-    val flattenSubscriptions: Dataset[(String, String)] = activeUsersDs
-      .flatMap { subscriptions => subscriptions.items.map((subscriptions.uid, _)) }
-
-    // результирующее представление для обучения рекомендатеьной системы
-    val starspaceOutput: Dataset[String] =
-    // TODO: join flattenSubscriptions с subscriptionsToFilter для дальнейшей фильтрации (joinWith); ключи для join в объекте-компаньоне
-      .filter(_ match {
-        case (_, toFilter) => toFilter == null
-      })
-      .map { case (subscriptions, _) => subscriptions }
-      .groupByKey { case (uid, _) => uid }
-      .mapGroups {
-        case (uid, subscriptions) => (uid, subscriptions.toList.map { case (_, subscriptionId) => subscriptionId })
-      }
-      .withColumnRenamed("_1", "uid")
-      .withColumnRenamed("_2", "items")
-      .as[UserSubscriptions]
-    // TODO: фильтрация пользователей с небольшим количеством подписок (filter)
-    // TODO: приведение к выходному виду для обучения рекомендатеьной системы (map)
-    // TODO: подготовка к записи одного файла (coalesce)
-
+    val starspaceOutput: Dataset[String] = userSubscriptionsDs
+      .map(toStarspaceOut)
+      .coalesce(1)
     starspaceOutput.writeText(starspaceOutPath)
   }
 }

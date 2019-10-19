@@ -1,0 +1,120 @@
+import org.apache.spark.sql.SparkSession
+import org.apache.spark.storage.StorageLevel
+
+// Создание сессии
+val ss: SparkSession = SparkSession
+  .builder()
+  .appName("demo")
+  .master("local[*]")
+  .getOrCreate()
+
+// Создание case-классов
+case class DemoRaw(str: String, num: String, lst: String)
+case class DemoConverted(str: String, num: Int, lst: List[String])
+
+// Импорт имплиситов спарк (для энкодеров и тд)
+import ss.implicits._
+
+// Создание ds из последовательности
+val dsFromSs = ss.createDataset[DemoConverted](
+  Seq(
+    DemoConverted("str1", 1, List("item11", "item12")),
+    DemoConverted("str2", 2, Nil)
+  )
+)
+dsFromSs.show(false)
+
+// Создание ds из файла (csv, но можно из кучи других)
+// Получаем df, конвертим к DS[String]
+val rawDs = ss.read.text("C:\\Data\\bdfd_2019\\demo\\src\\main\\resources\\demo.txt").as[String]
+rawDs.show(false)
+
+// Преобразовываем в роу, но плохо (можем упасть)
+val convertedRawMap = rawDs.map{line =>
+  val items = line.split(' ')
+  DemoRaw(items(0), items(1), items(2))
+}
+
+// Конвертируем, отбрасывая ошибки
+val convertedRaw = rawDs.flatMap(_.split(" ").toList match {
+  case str :: num :: lst :: Nil => Some(DemoRaw(str, num, lst))
+  case str :: num :: Nil => Some(DemoRaw(str, num, ""))
+  case _ => None
+})
+convertedRaw.show(false)
+
+// Используем map для преобразования каждой строки (можно flatMap для отброса плохих строк)
+val converted = convertedRaw.map(line =>
+  DemoConverted(
+    line.str,
+    line.num.toInt,
+    line.lst.split('|').toList
+  )
+)
+converted.show(false)
+
+// Еще одно использование flatMap
+val flatten = converted
+  .flatMap(line => line.lst.map(item => (line.str, item)))
+flatten.show(false)
+
+// Фильтрация
+val nilFiltered = converted
+  .filter(_.lst.nonEmpty)
+nilFiltered.show(false)
+
+// Дедупликация groupByKey + mapGroups (выбор первого)
+val deduplicatedMap = nilFiltered
+  .groupByKey(_.str)
+  .mapGroups{case (_, items) => items.toList.head}
+deduplicatedMap.show(false)
+
+// Дедупликация groupByKey + flatMapGroups (отброс дублей)
+val deduplicated = nilFiltered
+  .groupByKey(_.str)
+  .flatMapGroups{case (_, items) => items.toList match {
+    case head :: Nil => Some(head)
+    case _ => None
+  }}
+deduplicated.show(false)
+
+// Использование groupBeKey + count для подсчета ключей
+val keyCount = nilFiltered
+  .groupByKey(_.str)
+  .count
+keyCount.show(false)
+
+case class Statistic(key: String, count: Long)
+
+// Преобразование DF в DS с переименование колонок
+val statistic = keyCount
+  .withColumnRenamed("value", "key")
+  .withColumnRenamed("count(1)", "count")
+  .as[Statistic]
+statistic.show(false)
+
+// inner join
+val joinedInner = nilFiltered
+  .joinWith(
+    dsFromSs,
+    nilFiltered("str") === dsFromSs("str"),
+    "inner"
+  )
+joinedInner.show(false)
+
+// left_outer join
+val joinedOuter = nilFiltered
+  .joinWith(
+    dsFromSs,
+    nilFiltered("str") === dsFromSs("str"),
+    "left_outer"
+  )
+joinedOuter.show(false)
+
+// Запись в файл и контроль их количества
+nilFiltered.coalesce(1).write.text("C:\\Data\\bdfd_2019\\demo\\src\\main\\resources\\coalesce_out")
+nilFiltered.repartition(3).write.text("C:\\Data\\bdfd_2019\\demo\\src\\main\\resources\\repartition_out")
+
+// cache и persist
+nilFiltered.cache()
+nilFiltered.persist(StorageLevel.DISK_ONLY)

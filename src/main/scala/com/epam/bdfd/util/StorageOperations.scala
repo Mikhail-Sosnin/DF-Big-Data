@@ -3,6 +3,7 @@ package com.epam.bdfd.util
 import com.mongodb.spark.MongoSpark
 import com.mongodb.spark.config.ReadConfig
 import org.apache.spark.sql.{Dataset, Encoder}
+import org.apache.spark.sql.SaveMode.Overwrite
 
 import scala.reflect.runtime.universe.TypeTag
 

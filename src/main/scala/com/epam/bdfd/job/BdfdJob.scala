@@ -35,6 +35,7 @@ class BdfdJob extends Spark {
     // подписки пользователей
     val userSubscriptionsDs: Dataset[UserSubscriptions] = readText(sourceFilePath)
       .flatMap(toUserSubscriptions)
+
     //TODO: дедубликация (groupByKey, flatMapGroups)
 
     userSubscriptionsDs.writeParquet(archiveUserSubscriptionsPath)
@@ -48,10 +49,12 @@ class BdfdJob extends Spark {
 
     // объединенные подписки пользователей с информацией о пользователях
     val joined: Dataset[(UserSubscriptions, UserInfo)] =
+      userSubscriptionsDs.joinWith(userInfoDs,
+        userSubscriptionsDs("uid") === userInfoDs("uid"))
     // TODO: join двух Dataset (joinWith)
 
     // активные пользователи социальной сети
-    val activeUsersDs: Dataset[UserSubscriptions] =
+    val activeUsersDs: Dataset[UserSubscriptions] = userSubscriptionsDs
     // TODO: фильтрация joined по last_seen и deactivated (filter)
     // TODO: преобразование в UserSubscriptions (map)
 
@@ -67,7 +70,7 @@ class BdfdJob extends Spark {
       .flatMap { subscriptions => subscriptions.items.map((subscriptions.uid, _)) }
 
     // результирующее представление для обучения рекомендатеьной системы
-    val starspaceOutput: Dataset[String] =
+    val starspaceOutput: Dataset[String] = flattenSubscriptions
     // TODO: join flattenSubscriptions с subscriptionsToFilter для дальнейшей фильтрации (joinWith); ключи для join в объекте-компаньоне
       .filter(_ match {
         case (_, toFilter) => toFilter == null

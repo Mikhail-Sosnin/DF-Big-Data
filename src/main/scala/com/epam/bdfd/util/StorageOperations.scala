@@ -17,32 +17,13 @@ object StorageOperations extends Spark {
     * @tparam T тип Dataset
     */
   implicit class DatasetWriter[T: Encoder](ds: Dataset[T]) {
-    /** Метод для записи Dataset текстовые файлы
-      *
-      * @param path путь до директории
-      */
-    def writeText(path: String): Unit = ??? // TODO: реализовать метод
+    def writeText(path: String): Unit = ds.write.mode(Overwrite).text(path)
 
-    /** Метод для записи Dataset в parquet-файлы
-      *
-      * @param path путь до директории
-      */
-    def writeParquet(path: String): Unit = ??? // TODO: реализовать метод
-  }
+    def writeParquet(path: String): Unit = ds.write.mode(Overwrite).parquet(path)
+  }ds
 
-  /** Метод для чтения Dataset из MongoDB
-    *
-    * @param uri адрес коллекции для чтения
-    * @tparam T тип Dataset
-    * @return Dataset типа T со всеми записями из коллекции MongoDB
-    */
   def readMongo[T <: Product : Encoder : TypeTag](uri: String): Dataset[T] =
     MongoSpark.load[T](ss, ReadConfig(Map("uri" -> uri))).as[T]
 
-  /** Метод для чтения Dataset из текстового файла
-    *
-    * @param path путь до файла/директории
-    * @return Dataset[String] со всеми записями из файла/директории
-    */
-  def readText(path: String): Dataset[String] = ??? // TODO: реализовать метод
+  def readText(path: String): Dataset[String] = ss.read.textFile(path)
 }
